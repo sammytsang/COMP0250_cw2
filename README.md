@@ -1,8 +1,8 @@
-# COMP0250 CW2 — Team 1
+# COMP0250 CW2 — Team 20
 
 **UCL COMP0250 Coursework 2 — Pick and Place, Object Detection and Localisation**
 
-Authors: Team 1, UCL  
+Authors: Team 20, UCL  
 License: MIT
 
 ---
@@ -62,7 +62,7 @@ Clone this repository into the correct location inside your ROS 2 workspace:
 
 ```bash
 cd ~/comp0250_s26_labs/src/courseworks/
-git clone https://github.com/sammytsang/COMP0250_cw2 cw2_team_1
+git clone https://github.com/sammytsang/COMP0250_cw2 cw2_team_20
 ```
 
 ---
@@ -81,7 +81,7 @@ source install/setup.bash
 ## Run
 
 ```bash
-ros2 launch cw2_team_1 run_solution.launch.py use_gazebo_gui:=true use_rviz:=true
+ros2 launch cw2_team_20 run_solution.launch.py use_gazebo_gui:=true use_rviz:=true
 ```
 
 Optional arguments:
@@ -111,6 +111,39 @@ ros2 service call /task cw2_world_spawner/srv/TaskSetup "{task_index: 2}"
 # Task 3
 ros2 service call /task cw2_world_spawner/srv/TaskSetup "{task_index: 3}"
 ```
+
+---
+
+## Fixing the World Spawner Crash (Gazebo Entity State Race Condition)
+
+When calling `/task` immediately after spawning objects, the world spawner may crash with:
+
+```
+AttributeError: 'NoneType' object has no attribute 'pose'
+```
+
+This happens because Gazebo hasn't fully registered freshly-spawned entities when
+`get_model_state_by_name` / `get_model_state_via_gz` are first called.
+
+### Apply the fix
+
+Run the provided patch script **once** after cloning this repo:
+
+```bash
+bash ~/ros2_ws/src/comp0250_s26_labs/src/courseworks/cw2_team_20/scripts/fix_gazebo_state_retry.sh
+```
+
+The script patches **both** the installed copy and the source copy of
+`coursework_world_spawner.py` to:
+
+1. **`get_model_state_by_name`** — waits up to 10 s for the
+   `/gazebo/get_entity_state` service and retries the call up to 10 times
+   (1 s between attempts) before falling back to the CLI.
+2. **`get_model_state_via_gz`** — retries `gz model -m <name> -i` up to 5
+   times (1 s between attempts) before returning `None`.
+
+No `colcon build` is required for `cw2_world_spawner` after running the script
+(it is a pure-Python package).
 
 ---
 

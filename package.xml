@@ -1,10 +1,10 @@
 <?xml version="1.0"?>
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
-  <name>cw2_team_1</name>
+  <name>cw2_team_20</name>
   <version>1.0.0</version>
-  <description>COMP0250 CW2 — Team 1. Pick and Place, Object Detection and Localisation.</description>
-  <maintainer email="student@ucl.ac.uk">Team 1</maintainer>
+  <description>COMP0250 CW2 — Team 20. Pick and Place, Object Detection and Localisation.</description>
+  <maintainer email="student@ucl.ac.uk">Team 20</maintainer>
   <license>MIT</license>
   <buildtool_depend>ament_cmake</buildtool_depend>
   <buildtool_depend>rosidl_default_generators</buildtool_depend>
