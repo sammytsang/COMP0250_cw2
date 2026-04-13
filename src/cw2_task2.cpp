@@ -41,9 +41,8 @@ void cw2::t2_callback(
   } else if (mystery_type == ref2_type) {
     response->mystery_object_num = 2;
   } else {
-    // Fallback: if classifier returned "unknown" for mystery, try point density comparison.
-    // More points in centre region = cross (solid), fewer = nought (hollow)
-    // Default to 1 if we truly cannot determine
+    // Fallback: if classifier returned "unknown" for mystery or it didn't
+    // match either reference, default to 1.
     RCLCPP_WARN(node_->get_logger(),
       "Mystery type '%s' did not match ref1='%s' or ref2='%s'. Defaulting to 1.",
       mystery_type.c_str(), ref1_type.c_str(), ref2_type.c_str());
