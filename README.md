@@ -58,8 +58,13 @@ With no prior knowledge of the scene, the robot:
 
 ## Setup
 
-Clone this repository into the correct location inside your ROS 2 workspace:
+1. Clone the UCL lab framework (if not already done):
+```bash
+cd ~
+git clone https://github.com/surgical-vision/comp0250_s26_labs.git
+```
 
+2. Clone this repository into the courseworks folder:
 ```bash
 cd ~/comp0250_s26_labs/src/courseworks/
 git clone https://github.com/sammytsang/COMP0250_cw2 cw2_team_20
@@ -71,8 +76,9 @@ git clone https://github.com/sammytsang/COMP0250_cw2 cw2_team_20
 
 ```bash
 source /opt/ros/humble/setup.bash
+export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
 cd ~/comp0250_s26_labs
-colcon build --mixin release
+colcon build --mixin release --parallel-workers 1
 source install/setup.bash
 ```
 
@@ -81,6 +87,7 @@ source install/setup.bash
 ## Run
 
 ```bash
+export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
 ros2 launch cw2_team_20 run_solution.launch.py use_gazebo_gui:=true use_rviz:=true
 ```
 
@@ -130,7 +137,7 @@ This happens because Gazebo hasn't fully registered freshly-spawned entities whe
 Run the provided patch script **once** after cloning this repo:
 
 ```bash
-bash ~/ros2_ws/src/comp0250_s26_labs/src/courseworks/cw2_team_20/scripts/fix_gazebo_state_retry.sh
+bash ~/comp0250_s26_labs/src/courseworks/cw2_team_20/scripts/fix_gazebo_state_retry.sh
 ```
 
 The script patches **both** the installed copy and the source copy of

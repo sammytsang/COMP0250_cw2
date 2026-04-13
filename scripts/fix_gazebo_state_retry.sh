@@ -7,10 +7,10 @@
 # entity before giving up.
 #
 # Run once after cloning / rebuilding:
-#   bash ~/ros2_ws/src/comp0250_s26_labs/src/courseworks/cw2_team_20/scripts/fix_gazebo_state_retry.sh
+#   bash ~/comp0250_s26_labs/src/courseworks/cw2_team_20/scripts/fix_gazebo_state_retry.sh
 #
 # Environment variables (optional overrides):
-#   ROS2_WS        — path to the ROS 2 workspace (default: ~/ros2_ws)
+#   ROS2_WS        — path to the ROS 2 workspace (default: ~/comp0250_s26_labs)
 #   PYTHON_VERSION — e.g. "3.10" (default: auto-detected)
 #
 # No colcon rebuild is needed for cw2_world_spawner after running this script
@@ -20,14 +20,14 @@
 set -euo pipefail
 
 # --- Configurable paths --------------------------------------------------- #
-ROS2_WS="${ROS2_WS:-${HOME}/ros2_ws}"
+ROS2_WS="${ROS2_WS:-${HOME}/comp0250_s26_labs}"
 
 if [[ -z "${PYTHON_VERSION:-}" ]]; then
     PYTHON_VERSION="$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
 fi
 
 INSTALL_FILE="${ROS2_WS}/install/cw2_world_spawner/local/lib/python${PYTHON_VERSION}/dist-packages/cw2_world_spawner_lib/coursework_world_spawner.py"
-SOURCE_FILE="${ROS2_WS}/src/comp0250_s26_labs/src/courseworks/cw2_world_spawner/src/cw2_world_spawner_lib/coursework_world_spawner.py"
+SOURCE_FILE="${ROS2_WS}/src/courseworks/cw2_world_spawner/src/cw2_world_spawner_lib/coursework_world_spawner.py"
 # -------------------------------------------------------------------------- #
 
 patch_file() {
