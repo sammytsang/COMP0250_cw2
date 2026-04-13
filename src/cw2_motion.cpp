@@ -11,8 +11,9 @@ cw2::makeDownwardPose(double x, double y, double z, double yaw)
   pose.position.y = y;
   pose.position.z = z;
 
-  // 180 deg around X — end-effector pointing straight down
-  tf2::Quaternion base_q(1.0, 0.0, 0.0, 0.0);
+  // 180 deg around X — end-effector pointing straight down (x=1,y=0,z=0,w=0)
+  tf2::Quaternion base_q;
+  base_q.setRPY(M_PI, 0.0, 0.0);
   tf2::Quaternion yaw_q;
   yaw_q.setRPY(0.0, 0.0, yaw);
   tf2::Quaternion result_q = yaw_q * base_q;

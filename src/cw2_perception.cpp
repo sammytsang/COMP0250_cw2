@@ -188,6 +188,14 @@ std::string cw2::classifyShape(PointCPtr cloud)
     return "unknown";
   }
 
+  // Grid constants for the 2-D top-down projection
+  static constexpr int    GRID_SIZE         = 64;
+  static constexpr int    GRID_MAX_IDX      = GRID_SIZE - 1;   // 63
+  static constexpr int    GRID_BORDER       = 2;               // border pixels excluded from hole search
+  static constexpr int    GRID_INTERIOR_MAX = GRID_SIZE - 1 - GRID_BORDER;  // 61
+  // Minimum valid shape dimension (metres) — smaller bbox is considered invalid
+  static constexpr float  MIN_SHAPE_DIM_M   = 0.01f;
+
   // 1. Find XY bounding box
   float xmin = std::numeric_limits<float>::max();
   float xmax = -std::numeric_limits<float>::max();
@@ -206,20 +214,20 @@ std::string cw2::classifyShape(PointCPtr cloud)
 
   float xrange = xmax - xmin;
   float yrange = ymax - ymin;
-  if (xrange < 0.01f || yrange < 0.01f) {
+  if (xrange < MIN_SHAPE_DIM_M || yrange < MIN_SHAPE_DIM_M) {
     return "unknown";
   }
 
-  // 2. Create 64×64 projection
-  cv::Mat proj(64, 64, CV_8U, cv::Scalar(0));
+  // 2. Create GRID_SIZE×GRID_SIZE projection
+  cv::Mat proj(GRID_SIZE, GRID_SIZE, CV_8U, cv::Scalar(0));
   for (const auto & pt : cloud->points) {
     if (!std::isfinite(pt.x) || !std::isfinite(pt.y)) {
       continue;
     }
-    int gx = static_cast<int>((pt.x - xmin) / xrange * 63.0f);
-    int gy = static_cast<int>((pt.y - ymin) / yrange * 63.0f);
-    gx = std::max(0, std::min(63, gx));
-    gy = std::max(0, std::min(63, gy));
+    int gx = static_cast<int>((pt.x - xmin) / xrange * static_cast<float>(GRID_MAX_IDX));
+    int gy = static_cast<int>((pt.y - ymin) / yrange * static_cast<float>(GRID_MAX_IDX));
+    gx = std::max(0, std::min(GRID_MAX_IDX, gx));
+    gy = std::max(0, std::min(GRID_MAX_IDX, gy));
     proj.at<uint8_t>(gy, gx) = 255;
   }
 
@@ -234,15 +242,17 @@ std::string cw2::classifyShape(PointCPtr cloud)
   cv::floodFill(inverted, cv::Point(0, 0), cv::Scalar(128));
 
   int hole_pixels = 0;
-  for (int row = 2; row <= 61; ++row) {
-    for (int col = 2; col <= 61; ++col) {
+  for (int row = GRID_BORDER; row <= GRID_INTERIOR_MAX; ++row) {
+    for (int col = GRID_BORDER; col <= GRID_INTERIOR_MAX; ++col) {
       if (inverted.at<uint8_t>(row, col) == 0) {
         ++hole_pixels;
       }
     }
   }
 
-  double hole_fraction = static_cast<double>(hole_pixels) / (64.0 * 64.0);
+  double hole_fraction =
+    static_cast<double>(hole_pixels) /
+    static_cast<double>(GRID_SIZE * GRID_SIZE);
   RCLCPP_INFO(node_->get_logger(),
               "classifyShape: hole_fraction = %.4f", hole_fraction);
 
