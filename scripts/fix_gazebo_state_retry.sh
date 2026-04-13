@@ -72,12 +72,12 @@ def find_method_bounds(lines, sig_prefix):
 # 1. Ensure 'import time' is present                                 #
 # ------------------------------------------------------------------ #
 if not any('import time' in ln for ln in lines):
-    for i, ln in enumerate(lines):
-        if ln.startswith('import ') or ln.startswith('from '):
-            lines.insert(i, 'import time\n')
-            break
-    else:
-        lines.insert(0, 'import time\n')
+    insert_at = next(
+        (i for i, ln in enumerate(lines)
+         if ln.startswith('import ') or ln.startswith('from ')),
+        0,
+    )
+    lines.insert(insert_at, 'import time\n')
     print(f"[OK]   Added 'import time' to {path}")
 
 # ------------------------------------------------------------------ #
@@ -93,7 +93,7 @@ NEW_BY_NAME = [
     '    request.name = name\n',
     '    request.reference_frame = relname\n',
     '\n',
-    '    # Retry up to 30 times with 1s sleep\n',
+    '    # Retry up to 30 times with 1s sleep — entity may not be registered in Gazebo immediately after spawn\n',
     '    max_attempts = 30\n',
     '    for attempt in range(max_attempts):\n',
     '      resp = call_service_sync(self.client_node, self.get_state_client, request, timeout_sec=5.0)\n',
