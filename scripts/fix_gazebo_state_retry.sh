@@ -38,156 +38,133 @@ patch_file() {
         return
     fi
 
-    # ------------------------------------------------------------------ #
-    # 1. Ensure `import time` is present (needed for time.sleep calls)    #
-    # ------------------------------------------------------------------ #
-    if ! grep -q "^import time" "$TARGET"; then
-        # Insert after the first `import` line
-        sed -i '0,/^import /s//import time\nimport /' "$TARGET"
-        echo "[OK]   Added 'import time' to $TARGET"
-    else
-        echo "[OK]   'import time' already present in $TARGET"
-    fi
+    python3 << PYEOF
+import sys
 
-    # ------------------------------------------------------------------ #
-    # 2. Patch get_model_state_by_name                                    #
-    # ------------------------------------------------------------------ #
-    # Detect whether the file has already been patched
-    if grep -q "max_attempts = 10" "$TARGET"; then
-        echo "[SKIP] get_model_state_by_name already patched in $TARGET"
-    else
-        python3 - "$TARGET" <<'PYEOF'
-import sys, re
+path = "$TARGET"
 
-path = sys.argv[1]
 with open(path, 'r') as fh:
     src = fh.read()
 
-OLD = (
-    r'def get_model_state_by_name\(self, name, relname="world"\):\n'
-    r'        if self\.get_state_client\.wait_for_service\(timeout_sec=0\.2\):\n'
-    r'            request = GetEntityState\.Request\(\)\n'
-    r'            request\.name = name\n'
-    r'            request\.reference_frame = relname\n'
-    r'            return call_service_sync\(self\.client_node, self\.get_state_client, request, timeout_sec=5\.0\)\n'
-    r'\n'
-    r'        return self\.get_model_state_via_gz\(name\)'
-)
-
-NEW = (
-    'def get_model_state_by_name(self, name, relname="world"):\n'
-    '        # Wait longer for the service to be available\n'
-    '        if not self.get_state_client.wait_for_service(timeout_sec=10.0):\n'
-    '            return self.get_model_state_via_gz(name)\n'
-    '\n'
-    '        request = GetEntityState.Request()\n'
-    '        request.name = name\n'
-    '        request.reference_frame = relname\n'
-    '\n'
-    '        # Retry up to 10 times — entity may not be registered in Gazebo immediately after spawn\n'
-    '        max_attempts = 10\n'
-    '        for attempt in range(max_attempts):\n'
-    '            resp = call_service_sync(self.client_node, self.get_state_client, request, timeout_sec=5.0)\n'
-    '            if resp is not None and getattr(resp, \'success\', False):\n'
-    '                return resp\n'
-    '            time.sleep(1.0)\n'
-    '\n'
-    '        # Final fallback to gz model CLI\n'
-    '        return self.get_model_state_via_gz(name)'
-)
-
-new_src, n = re.subn(OLD, NEW, src, flags=re.MULTILINE)
-if n == 0:
-    print(f"[WARN] Could not find get_model_state_by_name pattern in {path} — skipping.")
+# ------------------------------------------------------------------ #
+# 1. Ensure 'import time' is present (needed for time.sleep calls)   #
+# ------------------------------------------------------------------ #
+if 'import time' not in src:
+    # Insert after the first import line
+    first_import = src.find('\nimport ')
+    if first_import == -1:
+        first_import = src.find('\nfrom ')
+    if first_import != -1:
+        src = src[:first_import + 1] + 'import time\n' + src[first_import + 1:]
+    else:
+        src = 'import time\n' + src
+    print(f"[OK]   Added 'import time' to {path}")
 else:
-    with open(path, 'w') as fh:
-        fh.write(new_src)
+    print(f"[OK]   'import time' already present in {path}")
+
+# ------------------------------------------------------------------ #
+# 2. Patch get_model_state_by_name                                    #
+# ------------------------------------------------------------------ #
+OLD_BY_NAME = \
+  '  def get_model_state_by_name(self, name, relname="world"):\n' \
+  '    if self.get_state_client.wait_for_service(timeout_sec=0.2):\n' \
+  '      request = GetEntityState.Request()\n' \
+  '      request.name = name\n' \
+  '      request.reference_frame = relname\n' \
+  '      return call_service_sync(self.client_node, self.get_state_client, request, timeout_sec=5.0)\n' \
+  '\n' \
+  '    # Gazebo Classic on ROS 2 Humble does not always expose get_entity_state\n' \
+  '    # reliably. Fall back to \`gz model -i\` so coursework task setup can still\n' \
+  '    # query spawned object poses.\n' \
+  '    return self.get_model_state_via_gz(name)'
+
+NEW_BY_NAME = \
+  '  def get_model_state_by_name(self, name, relname="world"):\n' \
+  '    # Wait up to 30s for service availability\n' \
+  '    if not self.get_state_client.wait_for_service(timeout_sec=30.0):\n' \
+  '      return self.get_model_state_via_gz(name)\n' \
+  '\n' \
+  '    request = GetEntityState.Request()\n' \
+  '    request.name = name\n' \
+  '    request.reference_frame = relname\n' \
+  '\n' \
+  '    # Retry up to 30 times with 1s sleep — entity may not be registered in Gazebo immediately after spawn\n' \
+  '    max_attempts = 30\n' \
+  '    for attempt in range(max_attempts):\n' \
+  "      resp = call_service_sync(self.client_node, self.get_state_client, request, timeout_sec=5.0)\n" \
+  "      if resp is not None and getattr(resp, 'success', False):\n" \
+  '        return resp\n' \
+  '      self.node.get_logger().warn(\n' \
+  "        f\"get_entity_state for '{name}' attempt {attempt+1}/{max_attempts} failed, retrying in 1s...\")\n" \
+  '      time.sleep(1.0)\n' \
+  '\n' \
+  '    return self.get_model_state_via_gz(name)'
+
+if OLD_BY_NAME in src:
+    src = src.replace(OLD_BY_NAME, NEW_BY_NAME, 1)
     print(f"[OK]   Patched get_model_state_by_name in {path}")
-PYEOF
-    fi
-
-    # ------------------------------------------------------------------ #
-    # 3. Patch get_model_state_via_gz                                     #
-    # ------------------------------------------------------------------ #
-    if grep -q "max_attempts = 5" "$TARGET"; then
-        echo "[SKIP] get_model_state_via_gz already patched in $TARGET"
-    else
-        python3 - "$TARGET" <<'PYEOF'
-import sys, re
-
-path = sys.argv[1]
-with open(path, 'r') as fh:
-    src = fh.read()
-
-# Match the entire existing try/except block inside get_model_state_via_gz.
-# The method currently does a single subprocess call followed by a regex parse.
-# We wrap both in a retry loop.
-OLD = (
-    r'(    def get_model_state_via_gz\(self, name\):\n)'
-    r'(        try:\n'
-    r'            output = subprocess\.check_output\(\n'
-    r"                \['gz', 'model', '-m', name, '-i'\],\n"
-    r'                stderr=subprocess\.STDOUT,\n'
-    r'                text=True,\n'
-    r'                timeout=3\.0,\n'
-    r'            \)\n'
-    r'        except Exception:\n'
-    r'            self\.node\.get_logger\(\)\.warn\(\n'
-    r'                f"Unable to query model state for \'\{name\}\' via /gazebo/get_entity_state or gz model"\)\n'
-    r'            return None\n'
-    r'\n'
-    r'        match = re\.search\((.*?)\)\n'
-    r'\n'
-    r'        if match is None:\n'
-    r'            return None)'
-)
-
-def replacer(m):
-    method_def = m.group(1)
-    search_args = m.group(3)  # captured by (.*?) inside re\.search\((.*?)\)
-    return (
-        method_def +
-        '        max_attempts = 5\n'
-        '        match = None\n'
-        '        for attempt in range(max_attempts):\n'
-        '            try:\n'
-        '                output = subprocess.check_output(\n'
-        "                    ['gz', 'model', '-m', name, '-i'],\n"
-        '                    stderr=subprocess.STDOUT,\n'
-        '                    text=True,\n'
-        '                    timeout=3.0,\n'
-        '                )\n'
-        '            except Exception:\n'
-        '                if attempt < max_attempts - 1:\n'
-        '                    time.sleep(1.0)\n'
-        '                    continue\n'
-        '                self.node.get_logger().warn(\n'
-        '                    f"Unable to query model state for \'{name}\' via /gazebo/get_entity_state or gz model")\n'
-        '                return None\n'
-        '\n'
-        f'            match = re.search({search_args})\n'
-        '\n'
-        '            if match is not None:\n'
-        '                break\n'
-        '            time.sleep(1.0)\n'
-        '\n'
-        '        if match is None:\n'
-        '            return None'
-    )
-
-new_src, n = re.subn(OLD, replacer, src, flags=re.DOTALL)
-if n == 0:
-    print(f"[WARN] Could not find get_model_state_via_gz pattern in {path} — skipping.")
-    print("       You may need to patch this method manually (see README.md).")
+elif NEW_BY_NAME in src:
+    print(f"[SKIP] get_model_state_by_name already patched in {path}")
 else:
-    with open(path, 'w') as fh:
-        fh.write(new_src)
-    print(f"[OK]   Patched get_model_state_via_gz in {path}")
-PYEOF
-    fi
+    print(f"[WARN] Could not find get_model_state_by_name pattern in {path} — skipping.")
 
-    echo "[DONE] $TARGET"
-    echo ""
+# ------------------------------------------------------------------ #
+# 3. Patch get_model_state_via_gz                                     #
+# ------------------------------------------------------------------ #
+OLD_VIA_GZ = \
+  '  def get_model_state_via_gz(self, name):\n' \
+  '    try:\n' \
+  '      output = subprocess.check_output(\n' \
+  "        ['gz', 'model', '-m', name, '-i'],\n" \
+  '        stderr=subprocess.STDOUT,\n' \
+  '        text=True,\n' \
+  '        timeout=3.0,\n' \
+  '      )\n' \
+  '    except Exception:\n' \
+  '      self.node.get_logger().warn(\n' \
+  '        f"Unable to query model state for \'{name}\' via /gazebo/get_entity_state or gz model")\n' \
+  '      return None'
+
+NEW_VIA_GZ = \
+  '  def get_model_state_via_gz(self, name):\n' \
+  '    max_attempts = 30\n' \
+  '    output = None\n' \
+  '    for attempt in range(max_attempts):\n' \
+  '      try:\n' \
+  '        output = subprocess.check_output(\n' \
+  "          ['gz', 'model', '-m', name, '-i'],\n" \
+  '          stderr=subprocess.STDOUT,\n' \
+  '          text=True,\n' \
+  '          timeout=5.0,\n' \
+  '        )\n' \
+  '        break\n' \
+  '      except Exception:\n' \
+  '        if attempt < max_attempts - 1:\n' \
+  '          self.node.get_logger().warn(\n' \
+  '            f"gz model query for \'{name}\' attempt {attempt+1}/{max_attempts} failed, retrying in 1s...")\n' \
+  '          time.sleep(1.0)\n' \
+  '        else:\n' \
+  '          self.node.get_logger().warn(\n' \
+  '            f"Unable to query model state for \'{name}\' via /gazebo/get_entity_state or gz model")\n' \
+  '          return None\n' \
+  '    if output is None:\n' \
+  '      return None'
+
+if OLD_VIA_GZ in src:
+    src = src.replace(OLD_VIA_GZ, NEW_VIA_GZ, 1)
+    print(f"[OK]   Patched get_model_state_via_gz in {path}")
+elif NEW_VIA_GZ in src:
+    print(f"[SKIP] get_model_state_via_gz already patched in {path}")
+else:
+    print(f"[WARN] Could not find get_model_state_via_gz pattern in {path} — skipping.")
+    print(f"       You may need to patch this method manually (see README.md).")
+
+with open(path, 'w') as fh:
+    fh.write(src)
+
+print(f"[DONE] {path}")
+print()
+PYEOF
 }
 
 echo "=== Patching installed copy ==="
