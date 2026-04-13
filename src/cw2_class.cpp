@@ -91,32 +91,4 @@ void cw2::cloud_callback(sensor_msgs::msg::PointCloud2::ConstSharedPtr msg)
   ++g_cloud_sequence_;
 }
 
-// ---------------------------------------------------------------------------
-// Task callback stubs (implementations are in cw2_task1/2/3.cpp)
-// ---------------------------------------------------------------------------
-void cw2::t1_callback(
-  std::shared_ptr<cw2_world_spawner::srv::Task1Service::Request> req,
-  std::shared_ptr<cw2_world_spawner::srv::Task1Service::Response> res)
-{
-  (void)req;
-  (void)res;
-  RCLCPP_WARN(node_->get_logger(), "Task 1 callback: not yet implemented");
-}
 
-void cw2::t2_callback(
-  std::shared_ptr<cw2_world_spawner::srv::Task2Service::Request> req,
-  std::shared_ptr<cw2_world_spawner::srv::Task2Service::Response> res)
-{
-  (void)req;
-  (void)res;
-  RCLCPP_WARN(node_->get_logger(), "Task 2 callback: not yet implemented");
-}
-
-void cw2::t3_callback(
-  std::shared_ptr<cw2_world_spawner::srv::Task3Service::Request> req,
-  std::shared_ptr<cw2_world_spawner::srv::Task3Service::Response> res)
-{
-  (void)req;
-  (void)res;
-  RCLCPP_WARN(node_->get_logger(), "Task 3 callback: not yet implemented");
-}
